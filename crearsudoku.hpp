@@ -224,7 +224,7 @@ void Sudoku::permutarNumeros(
 
 inline void Sudoku::crearSudoku() {
 
-    std::vector<std::vector<int>> sudoku(
+    sudoku = std::vector<std::vector<int>>(
         9,
         std::vector<int>(9)
     );
