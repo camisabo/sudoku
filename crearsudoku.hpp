@@ -4,343 +4,472 @@
 #include <vector>
 #include <random>
 #include <algorithm>
+#include <thread> //para los hilos
+#include <atomic> //para las variables atómicas
+#include <mutex> //para los mutex
 
 class Sudoku {
-
 public:
-    Sudoku(int l)
-        : llave(l), gen(l)
-    {}
+
+    Sudoku(unsigned int sem1, unsigned int sem2, unsigned int sem3)
+        : seed1(sem1),
+          seed2(sem2),
+          seed3(sem3),
+          gen1(sem1),
+          gen2(sem2),
+          gen3(sem3)
+    {
+        tablero = std::vector<std::vector<int>>(9, std::vector<int>(9, 0));
+    }
 
     void crearSudoku();
+    void imprimirSolucion() const;
+    void imprimirSudoku() const;
+    std::vector<std::vector<std::string>> obtenerSudokuJuego() const;
+    bool resolverSudokuParalelo(std::vector<std::vector<std::string>>& sudokuJuego);
 
 private:
 
-    std::vector<int> numerosAleatorios(int n);
+    unsigned int seed1, seed2, seed3;
 
-    void imprimirSudoku(
-        const std::vector<std::vector<int>>& sudoku
-    );
+    std::mt19937 gen1;
+    std::mt19937 gen2;
+    std::mt19937 gen3;
 
-    void intercambiarFilas(
-        std::vector<std::vector<int>>& sudoku,
-        int r1,
-        int r2
-    );
+    std::vector<std::vector<int>> tablero;
+    std::vector<std::vector<int>> mascara;
 
-    void intercambiarColumnas(
-        std::vector<std::vector<int>>& sudoku,
-        int c1,
-        int c2
-    );
-
-    void intercambiarBandas(
-        std::vector<std::vector<int>>& sudoku,
-        int b1,
-        int b2
-    );
-
-    void intercambiarStacks(
-        std::vector<std::vector<int>>& sudoku,
-        int s1,
-        int s2
-    );
-
-    void transponer(
-        std::vector<std::vector<int>>& sudoku
-    );
-
-    void permutarNumeros(
-        std::vector<std::vector<int>>& sudoku
-    );
+    std::vector<std::vector<std::vector<int>>> tensor3D;
 
 private:
-    int llave;
-    std::mt19937 gen;
-    std::vector<std::vector<int>> sudoku;
+
+    bool llenarSudoku(int fila, int columna);
+
+    bool esValido(int fila, int columna, int numero) const;
+
+    std::vector<int> numerosAleatorios();
+
+    void generarMascaraBinaria();
+
+    void construirTensor();
+
+    bool resolverBacktracking(
+        std::vector<std::vector<int>>& tableroResolver,
+        int fila,
+        int columna
+    );
+
+    bool esValidoParalelo(
+        const std::vector<std::vector<int>>& tableroResolver,
+        int fila,
+        int columna,
+        int numero
+    ) const;
 };
 
-
-
-
-
-std::vector<int> Sudoku::numerosAleatorios(int n) {
-
-    std::vector<int> numeros;
-
-    for (int i = 1; i <= n; i++) {
-        numeros.push_back(i);
-    }
-
-    std::shuffle(
-        numeros.begin(),
-        numeros.end(),
-        gen
-    );
-
-    return numeros;
-}
-
-
-
-
-
-void Sudoku::imprimirSudoku(
-    const std::vector<std::vector<int>>& sudoku
+std::vector<std::vector<int>> convertirJuegoAEnteros(
+    const std::vector<std::vector<std::string>>& juego
 ) {
 
-    for (int i = 0; i < 9; i++) {
+    std::vector<std::vector<int>> t(9, std::vector<int>(9, 0));
 
-        if (i % 3 == 0 && i != 0) {
-            std::cout << "------+-------+------\n";
-        }
+    for (int i = 0; i < 9; ++i) {
 
-        for (int j = 0; j < 9; j++) {
+        for (int j = 0; j < 9; ++j) {
 
-            if (j % 3 == 0 && j != 0) {
-                std::cout << "| ";
-            }
-
-            std::cout << sudoku[i][j] << ' ';
-        }
-
-        std::cout << '\n';
-    }
-}
-
-
-
-
-
-void Sudoku::intercambiarFilas(
-    std::vector<std::vector<int>>& sudoku,
-    int r1,
-    int r2
-) {
-    std::swap(sudoku[r1], sudoku[r2]);
-}
-
-
-
-
-
-void Sudoku::intercambiarColumnas(
-    std::vector<std::vector<int>>& sudoku,
-    int c1,
-    int c2
-) {
-
-    for (int i = 0; i < 9; i++) {
-        std::swap(
-            sudoku[i][c1],
-            sudoku[i][c2]
-        );
-    }
-}
-
-
-
-
-
-void Sudoku::intercambiarBandas(
-    std::vector<std::vector<int>>& sudoku,
-    int b1,
-    int b2
-) {
-
-    for (int i = 0; i < 3; i++) {
-
-        intercambiarFilas(
-            sudoku,
-            b1 * 3 + i,
-            b2 * 3 + i
-        );
-    }
-}
-
-
-
-
-
-void Sudoku::intercambiarStacks(
-    std::vector<std::vector<int>>& sudoku,
-    int s1,
-    int s2
-) {
-
-    for (int i = 0; i < 3; i++) {
-
-        intercambiarColumnas(
-            sudoku,
-            s1 * 3 + i,
-            s2 * 3 + i
-        );
-    }
-}
-
-
-
-
-
-void Sudoku::transponer(
-    std::vector<std::vector<int>>& sudoku
-) {
-
-    for (int i = 0; i < 9; i++) {
-
-        for (int j = i + 1; j < 9; j++) {
-
-            std::swap(
-                sudoku[i][j],
-                sudoku[j][i]
-            );
+            if (juego[i][j] != "[]")
+                t[i][j] = std::stoi(juego[i][j]);
         }
     }
+
+    return t;
 }
 
+std::vector<std::vector<std::string>> Sudoku::obtenerSudokuJuego() const {
 
-
-
-
-void Sudoku::permutarNumeros(
-    std::vector<std::vector<int>>& sudoku
-) {
-
-    std::vector<int> nums =
-        numerosAleatorios(9);
-
-    for (auto& fila : sudoku) {
-
-        for (auto& num : fila) {
-
-            num = nums[num - 1];
-        }
-    }
-}
-
-
-
-
-
-inline void Sudoku::crearSudoku() {
-
-    sudoku = std::vector<std::vector<int>>(
+    std::vector<std::vector<std::string>> matriz(
         9,
-        std::vector<int>(9)
+        std::vector<std::string>(9)
     );
 
-    // Sudoku base válido
-    for (int i = 0; i < 9; i++) {
+    for (int i = 0; i < 9; ++i) {
 
-        for (int j = 0; j < 9; j++) {
+        for (int j = 0; j < 9; ++j) {
 
-            sudoku[i][j] =
-                (i * 3 + i / 3 + j) % 9 + 1;
+            if (tensor3D[1][i][j] == 1) {
+
+                matriz[i][j] = std::to_string(tensor3D[0][i][j]);
+
+            } else {
+
+                matriz[i][j] = "[]";
+            }
         }
     }
 
-    std::uniform_int_distribution<int>
-        dist(0, 2);
+    return matriz;
+}
 
-    std::uniform_int_distribution<int>
-        boolDist(0, 1);
+// ======================================================
+// Genera vector 1..9 mezclado usando semillas
+// ======================================================
 
-    int iteraciones =
-        100 + (llave % 200);
+std::vector<int> Sudoku::numerosAleatorios() {
 
-    for (int k = 0; k < iteraciones; k++) {
+    std::vector<int> nums = {1,2,3,4,5,6,7,8,9};
 
-        int operacion =
-            std::uniform_int_distribution<int>(0, 4)(gen);
+    std::shuffle(nums.begin(), nums.end(), gen1);
 
-        switch (operacion) {
+    return nums;
+}
 
-        // intercambiar filas
-        case 0: {
 
-            int banda = dist(gen);
 
-            int r1 =
-                banda * 3 + dist(gen);
 
-            int r2 =
-                banda * 3 + dist(gen);
 
-            intercambiarFilas(
-                sudoku,
-                r1,
-                r2
-            );
+// ======================================================
+// Verifica legalidad
+// ======================================================
 
-            break;
+bool Sudoku::esValido(int fila, int columna, int numero) const {
+
+    // fila
+    for (int j = 0; j < 9; ++j) {
+        if (tablero[fila][j] == numero)
+            return false;
+    }
+
+    // columna
+    for (int i = 0; i < 9; ++i) {
+        if (tablero[i][columna] == numero)
+            return false;
+    }
+
+    // submatriz
+    int inicioFila = (fila / 3) * 3;
+    int inicioCol = (columna / 3) * 3;
+
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+
+            if (tablero[inicioFila + i][inicioCol + j] == numero)
+                return false;
+        }
+    }
+
+    return true;
+}
+
+
+
+
+
+// ======================================================
+// Backtracking principal
+// ======================================================
+
+bool Sudoku::llenarSudoku(int fila, int columna) {
+
+    // terminó
+    if (fila == 9)
+        return true;
+
+    // siguiente posición
+    int siguienteFila = fila;
+    int siguienteColumna = columna + 1;
+
+    if (siguienteColumna == 9) {
+        siguienteColumna = 0;
+        siguienteFila++;
+    }
+
+    // orden aleatorio por semilla
+    std::vector<int> nums = numerosAleatorios();
+
+    // intenta números
+    for (int numero : nums) {
+
+        if (esValido(fila, columna, numero)) {
+
+            tablero[fila][columna] = numero;
+
+            if (llenarSudoku(siguienteFila, siguienteColumna))
+                return true;
+
+            // revertir
+            tablero[fila][columna] = 0;
+        }
+    }
+
+    return false;
+}
+
+
+
+
+
+// ======================================================
+// Máscara
+// ======================================================
+
+void Sudoku::generarMascaraBinaria() {
+
+    mascara = std::vector<std::vector<int>>(9, std::vector<int>(9));
+
+    std::uniform_int_distribution<int> dist(1, 100);
+
+    for (int i = 0; i < 9; ++i) {
+
+        for (int j = 0; j < 9; ++j) {
+
+            mascara[i][j] = (dist(gen3) <= 25) ? 1 : 0;
+        }
+    }
+}
+
+
+
+
+
+// ======================================================
+// Tensor
+// ======================================================
+
+void Sudoku::construirTensor() {
+
+    tensor3D.clear();
+
+    tensor3D.push_back(tablero);
+
+    tensor3D.push_back(mascara);
+}
+
+
+
+
+
+// ======================================================
+// Crear Sudoku
+// ======================================================
+
+void Sudoku::crearSudoku() {
+
+    llenarSudoku(0, 0);
+
+    generarMascaraBinaria();
+
+    construirTensor();
+}
+
+
+
+
+
+// ======================================================
+// Imprimir solución
+// ======================================================
+
+void Sudoku::imprimirSolucion() const {
+
+    std::cout << "=== SOLUCION ===\n";
+
+    for (int i = 0; i < 9; ++i) {
+
+        if (i % 3 == 0 && i != 0)
+            std::cout << "------+-------+------\n";
+
+        for (int j = 0; j < 9; ++j) {
+
+            if (j % 3 == 0 && j != 0)
+                std::cout << "| ";
+
+            std::cout << tensor3D[0][i][j] << " ";
         }
 
-        // intercambiar columnas
-        case 1: {
+        std::cout << "\n";
+    }
 
-            int stack = dist(gen);
+    std::cout << "\n";
+}
 
-            int c1 =
-                stack * 3 + dist(gen);
 
-            int c2 =
-                stack * 3 + dist(gen);
 
-            intercambiarColumnas(
-                sudoku,
-                c1,
-                c2
-            );
 
-            break;
+
+// ======================================================
+// Imprimir juego
+// ======================================================
+
+void Sudoku::imprimirSudoku() const {
+
+    std::cout << "=== JUEGO ===\n";
+
+    for (int i = 0; i < 9; ++i) {
+
+        if (i % 3 == 0 && i != 0)
+            std::cout << "------+-------+------\n";
+
+        for (int j = 0; j < 9; ++j) {
+
+            if (j % 3 == 0 && j != 0)
+                std::cout << "| ";
+
+            if (tensor3D[1][i][j] == 1)
+                std::cout << tensor3D[0][i][j] << " ";
+            else
+                std::cout << "[]";
         }
 
-        // intercambiar bandas
-        case 2: {
+        std::cout << "\n";
+    }
 
-            int b1 = dist(gen);
-            int b2 = dist(gen);
+    std::cout << "\n";
+}
 
-            intercambiarBandas(
-                sudoku,
-                b1,
-                b2
-            );
+bool Sudoku::esValidoParalelo(
+    const std::vector<std::vector<int>>& t,
+    int fila,
+    int columna,
+    int numero
+) const {
 
-            break;
+    std::atomic<bool> valido(true);
+
+    // ==========================================
+    // HILO FILA
+    // ==========================================
+
+    std::thread hiloFila([&]() {
+
+        for (int j = 0; j < 9; ++j) {
+
+            if (t[fila][j] == numero) {
+
+                valido = false;
+                return;
+            }
         }
+    });
 
-        // intercambiar stacks
-        case 3: {
+    // ==========================================
+    // HILO COLUMNA
+    // ==========================================
 
-            int s1 = dist(gen);
-            int s2 = dist(gen);
+    std::thread hiloColumna([&]() {
 
-            intercambiarStacks(
-                sudoku,
-                s1,
-                s2
-            );
+        for (int i = 0; i < 9; ++i) {
 
-            break;
+            if (t[i][columna] == numero) {
+
+                valido = false;
+                return;
+            }
         }
+    });
 
-        // transponer
-        case 4: {
+    // ==========================================
+    // HILO SUBMATRIZ
+    // ==========================================
 
-            if (boolDist(gen)) {
+    std::thread hiloSubmatriz([&]() {
 
-                transponer(sudoku);
+        int inicioFila = (fila / 3) * 3;
+        int inicioCol = (columna / 3) * 3;
+
+        for (int i = 0; i < 3; ++i) {
+
+            for (int j = 0; j < 3; ++j) {
+
+                if (t[inicioFila + i][inicioCol + j] == numero) {
+
+                    valido = false;
+                    return;
+                }
+            }
+        }
+    });
+
+    hiloFila.join();
+    hiloColumna.join();
+    hiloSubmatriz.join();
+
+    return valido;
+} 
+
+bool Sudoku::resolverBacktracking(
+    std::vector<std::vector<int>>& t,
+    int fila,
+    int columna
+) {
+
+    if (fila == 9)
+        return true;
+
+    int siguienteFila = fila;
+    int siguienteCol = columna + 1;
+
+    if (siguienteCol == 9) {
+
+        siguienteCol = 0;
+        siguienteFila++;
+    }
+
+    if (t[fila][columna] != 0) {
+
+        return resolverBacktracking(
+            t,
+            siguienteFila,
+            siguienteCol
+        );
+    }
+
+    for (int num = 1; num <= 9; ++num) {
+
+        if (esValidoParalelo(t, fila, columna, num)) {
+
+            t[fila][columna] = num;
+
+            if (resolverBacktracking(
+                t,
+                siguienteFila,
+                siguienteCol
+            )) {
+                return true;
             }
 
-            break;
-        }
-
+            t[fila][columna] = 0;
         }
     }
 
-    // cambia visualmente los números
-    permutarNumeros(sudoku);
+    return false;
+}
 
-    imprimirSudoku(sudoku);
+bool Sudoku::resolverSudokuParalelo(
+    std::vector<std::vector<std::string>>& sudokuJuego
+) {
+
+    auto tableroResolver =
+        convertirJuegoAEnteros(sudokuJuego);
+
+    bool resuelto =
+        resolverBacktracking(
+            tableroResolver,
+            0,
+            0
+        );
+
+    if (!resuelto)
+        return false;
+
+    // copiar solución
+    for (int i = 0; i < 9; ++i) {
+
+        for (int j = 0; j < 9; ++j) {
+
+            sudokuJuego[i][j] =
+                std::to_string(tableroResolver[i][j]);
+        }
+    }
+
+    return true;
 }
