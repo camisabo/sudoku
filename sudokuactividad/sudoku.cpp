@@ -4,8 +4,7 @@
 #include <mutex> //para los mutex
 
 int main() {
-    // Pasamos 3 semillas numéricas cualesquiera
-    Sudoku juego(12341, 5678, 91011);
+    Sudoku juego(1, 1, 1);
     
     juego.crearSudoku();
     
@@ -23,6 +22,8 @@ int main() {
     */
 
     bool ok = juego.resolverSudokuParalelo(a);
+
+    std::cout <<ok << "\n";
 
     if (ok) {
 

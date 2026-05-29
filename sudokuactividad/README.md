@@ -633,16 +633,3 @@ g++ main.cpp -std=c++17 -pthread -O2
 * GCC 11+
 * C++17
 * Linux o WSL
-
----
-
-# Autor
-
-Proyecto educativo de:
-
-* generación procedural,
-* algoritmos,
-* backtracking,
-* concurrencia,
-* estructuras de datos,
-* C++ moderno.

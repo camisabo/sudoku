@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <thread> //para los hilos
 #include <atomic> //para las variables atómicas
-#include <mutex> //para los mutex
+//#include <mutex> //para los mutex
 
 class Sudoku {
 public:
@@ -15,7 +15,7 @@ public:
         : seed1(sem1),
           seed2(sem2),
           seed3(sem3),
-          gen1(sem1),
+          gen1(sem1), 
           gen2(sem2),
           gen3(sem3)
     {
