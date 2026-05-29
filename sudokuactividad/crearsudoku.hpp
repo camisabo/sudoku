@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <thread> //para los hilos
 #include <atomic> //para las variables atómicas
-//#include <mutex> //para los mutex
+#include <mutex> //para los mutex
 
 class Sudoku {
 public:
@@ -27,6 +27,7 @@ public:
     void imprimirSudoku() const;
     std::vector<std::vector<std::string>> obtenerSudokuJuego() const;
     bool resolverSudokuParalelo(std::vector<std::vector<std::string>>& sudokuJuego);
+    
 
 private:
 
@@ -45,7 +46,12 @@ private:
 
     bool llenarSudoku(int fila, int columna);
 
-    bool esValido(int fila, int columna, int numero) const;
+    bool esValido(
+        const std::vector<std::vector<int>>& t, 
+        int fila, 
+        int columna, 
+        int numero
+    ) const;
 
     std::vector<int> numerosAleatorios();
 
@@ -54,17 +60,11 @@ private:
     void construirTensor();
 
     bool resolverBacktracking(
-        std::vector<std::vector<int>>& tableroResolver,
-        int fila,
-        int columna
-    );
-
-    bool esValidoParalelo(
-        const std::vector<std::vector<int>>& tableroResolver,
+        std::vector<std::vector<int>>& t,
         int fila,
         int columna,
-        int numero
-    ) const;
+        std::atomic<bool>& encontrado
+    );
 };
 
 std::vector<std::vector<int>> convertirJuegoAEnteros(
@@ -131,17 +131,22 @@ std::vector<int> Sudoku::numerosAleatorios() {
 // Verifica legalidad
 // ======================================================
 
-bool Sudoku::esValido(int fila, int columna, int numero) const {
+bool Sudoku::esValido(
+    const std::vector<std::vector<int>>& t, 
+    int fila, 
+    int columna, 
+    int numero
+) const {
 
     // fila
     for (int j = 0; j < 9; ++j) {
-        if (tablero[fila][j] == numero)
+        if (t[fila][j] == numero)
             return false;
     }
 
     // columna
     for (int i = 0; i < 9; ++i) {
-        if (tablero[i][columna] == numero)
+        if (t[i][columna] == numero)
             return false;
     }
 
@@ -151,17 +156,13 @@ bool Sudoku::esValido(int fila, int columna, int numero) const {
 
     for (int i = 0; i < 3; ++i) {
         for (int j = 0; j < 3; ++j) {
-
-            if (tablero[inicioFila + i][inicioCol + j] == numero)
+            if (t[inicioFila + i][inicioCol + j] == numero)
                 return false;
         }
     }
 
     return true;
 }
-
-
-
 
 
 // ======================================================
@@ -189,7 +190,7 @@ bool Sudoku::llenarSudoku(int fila, int columna) {
     // intenta números
     for (int numero : nums) {
 
-        if (esValido(fila, columna, numero)) {
+        if (esValido(tablero, fila, columna, numero)) {
 
             tablero[fila][columna] = numero;
 
@@ -326,148 +327,104 @@ void Sudoku::imprimirSudoku() const {
     std::cout << "\n";
 }
 
-bool Sudoku::esValidoParalelo(
-    const std::vector<std::vector<int>>& t,
-    int fila,
-    int columna,
-    int numero
-) const {
-
-    std::atomic<bool> valido(true);
-
-    // ==========================================
-    // HILO FILA
-    // ==========================================
-
-    std::thread hiloFila([&]() {
-
-        for (int j = 0; j < 9; ++j) {
-
-            if (t[fila][j] == numero) {
-
-                valido = false;
-                return;
-            }
-        }
-    });
-
-    // ==========================================
-    // HILO COLUMNA
-    // ==========================================
-
-    std::thread hiloColumna([&]() {
-
-        for (int i = 0; i < 9; ++i) {
-
-            if (t[i][columna] == numero) {
-
-                valido = false;
-                return;
-            }
-        }
-    });
-
-    // ==========================================
-    // HILO SUBMATRIZ
-    // ==========================================
-
-    std::thread hiloSubmatriz([&]() {
-
-        int inicioFila = (fila / 3) * 3;
-        int inicioCol = (columna / 3) * 3;
-
-        for (int i = 0; i < 3; ++i) {
-
-            for (int j = 0; j < 3; ++j) {
-
-                if (t[inicioFila + i][inicioCol + j] == numero) {
-
-                    valido = false;
-                    return;
-                }
-            }
-        }
-    });
-
-    hiloFila.join();
-    hiloColumna.join();
-    hiloSubmatriz.join();
-
-    return valido;
-} 
 
 bool Sudoku::resolverBacktracking(
     std::vector<std::vector<int>>& t,
     int fila,
-    int columna
+    int columna,
+    std::atomic<bool>& encontrado
 ) {
+    // Si otro hilo ya encontró la solución, abortamos inmediatamente
+    if (encontrado) return false; 
 
-    if (fila == 9)
-        return true;
+    if (fila == 9) return true;
 
     int siguienteFila = fila;
     int siguienteCol = columna + 1;
-
     if (siguienteCol == 9) {
-
         siguienteCol = 0;
         siguienteFila++;
     }
 
     if (t[fila][columna] != 0) {
-
-        return resolverBacktracking(
-            t,
-            siguienteFila,
-            siguienteCol
-        );
+        return resolverBacktracking(t, siguienteFila, siguienteCol, encontrado);
     }
 
     for (int num = 1; num <= 9; ++num) {
-
-        if (esValidoParalelo(t, fila, columna, num)) {
-
+        if (esValido(t, fila, columna, num)) {
             t[fila][columna] = num;
 
-            if (resolverBacktracking(
-                t,
-                siguienteFila,
-                siguienteCol
-            )) {
+            if (resolverBacktracking(t, siguienteFila, siguienteCol, encontrado)) {
                 return true;
             }
 
             t[fila][columna] = 0;
         }
     }
-
     return false;
 }
 
 bool Sudoku::resolverSudokuParalelo(
     std::vector<std::vector<std::string>>& sudokuJuego
 ) {
+    auto tableroResolver = convertirJuegoAEnteros(sudokuJuego);
 
-    auto tableroResolver =
-        convertirJuegoAEnteros(sudokuJuego);
-
-    bool resuelto =
-        resolverBacktracking(
-            tableroResolver,
-            0,
-            0
-        );
-
-    if (!resuelto)
-        return false;
-
-    // copiar solución
+    // 1. Encontrar la primera celda vacía del tablero
+    int filaVacia = -1, colVacia = -1;
     for (int i = 0; i < 9; ++i) {
-
         for (int j = 0; j < 9; ++j) {
+            if (tableroResolver[i][j] == 0) {
+                filaVacia = i;
+                colVacia = j;
+                break;
+            }
+        }
+        if (filaVacia != -1) break;
+    }
 
-            sudokuJuego[i][j] =
-                std::to_string(tableroResolver[i][j]);
+    // Si no hay celdas vacías, el Sudoku ya vino resuelto
+    if (filaVacia == -1) return true;
+
+    std::atomic<bool> encontrado(false);
+    std::mutex mtx;
+    std::vector<std::vector<int>> tableroGanador;
+    std::vector<std::thread> hilos;
+
+    // 2. Lanzar hilos concurrentes para cada número posible en esa celda
+    for (int num = 1; num <= 9; ++num) {
+        if (esValido(tableroResolver, filaVacia, colVacia, num)) {
+            
+            // Pasamos 'tableroResolver' por copia para que cada hilo tenga su propio entorno
+            hilos.push_back(std::thread([&, num, tableroResolver]() mutable {
+                tableroResolver[filaVacia][colVacia] = num;
+                
+                int sigFila = filaVacia;
+                int sigCol = colVacia + 1;
+                if (sigCol == 9) { sigCol = 0; sigFila++; }
+
+                // Ejecuta el algoritmo de forma secuencial en su propia rama
+                if (resolverBacktracking(tableroResolver, sigFila, sigCol, encontrado)) {
+                    std::lock_guard<std::mutex> lock(mtx);
+                    if (!encontrado) { 
+                        encontrado = true;
+                        tableroGanador = tableroResolver; // Guardamos la solución
+                    }
+                }
+            }));
+        }
+    }
+
+    // 3. Esperar a que todos los hilos terminen
+    for (auto& h : hilos) {
+        if (h.joinable()) h.join();
+    }
+
+    if (!encontrado) return false;
+
+    // 4. Copiar la solución encontrada de vuelta a la matriz de strings
+    for (int i = 0; i < 9; ++i) {
+        for (int j = 0; j < 9; ++j) {
+            sudokuJuego[i][j] = std::to_string(tableroGanador[i][j]);
         }
     }
 
